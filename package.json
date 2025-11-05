@@ -1,0 +1,16 @@
+{
+  "name": "newsapp",
+  "version": "1.0.0",
+  "description": "A mobile-first news application inspired by Artifact that uses Claude AI to learn your preferences, categorize content, and deliver a personalized reading experience.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.56.1"
+  }
+}
