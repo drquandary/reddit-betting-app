@@ -469,8 +469,11 @@ def get_markets():
         # Convert timestamps and decimals to JSON-serializable types
         for market in markets:
             market['total_pool'] = float(market['total_pool'])
-            market['created_at'] = market['created_at'].isoformat() if market.get('created_at') else None
-            market['resolution_date'] = market['resolution_date'].isoformat() if market.get('resolution_date') else None
+            # Handle datetime objects
+            if market.get('created_at'):
+                market['created_at'] = market['created_at'].isoformat() if hasattr(market['created_at'], 'isoformat') else market['created_at']
+            if market.get('resolution_date'):
+                market['resolution_date'] = market['resolution_date'].isoformat() if hasattr(market['resolution_date'], 'isoformat') else market['resolution_date']
 
         return jsonify({
             'markets': markets,
@@ -492,8 +495,10 @@ def get_market(market_id):
 
         # Convert to JSON-serializable
         market['total_pool'] = float(market['total_pool'])
-        market['created_at'] = market['created_at'].isoformat() if market.get('created_at') else None
-        market['resolution_date'] = market['resolution_date'].isoformat() if market.get('resolution_date') else None
+        if market.get('created_at'):
+            market['created_at'] = market['created_at'].isoformat() if hasattr(market['created_at'], 'isoformat') else market['created_at']
+        if market.get('resolution_date'):
+            market['resolution_date'] = market['resolution_date'].isoformat() if hasattr(market['resolution_date'], 'isoformat') else market['resolution_date']
 
         return jsonify({'market': market}), 200
 
@@ -999,8 +1004,10 @@ def get_my_bets():
             bet['amount'] = float(bet['amount'])
             bet['shares'] = float(bet['shares'])
             bet['potential_payout'] = float(bet['potential_payout'])
-            bet['created_at'] = bet['created_at'].isoformat() if bet.get('created_at') else None
-            bet['resolution_date'] = bet['resolution_date'].isoformat() if bet.get('resolution_date') else None
+            if bet.get('created_at'):
+                bet['created_at'] = bet['created_at'].isoformat() if hasattr(bet['created_at'], 'isoformat') else bet['created_at']
+            if bet.get('resolution_date'):
+                bet['resolution_date'] = bet['resolution_date'].isoformat() if hasattr(bet['resolution_date'], 'isoformat') else bet['resolution_date']
 
         return jsonify({
             'bets': bets,
@@ -1024,7 +1031,8 @@ def get_market_bets(market_id):
             bet['amount'] = float(bet['amount'])
             bet['shares'] = float(bet['shares'])
             bet['potential_payout'] = float(bet['potential_payout'])
-            bet['created_at'] = bet['created_at'].isoformat() if bet.get('created_at') else None
+            if bet.get('created_at'):
+                bet['created_at'] = bet['created_at'].isoformat() if hasattr(bet['created_at'], 'isoformat') else bet['created_at']
 
         return jsonify({
             'bets': bets,
