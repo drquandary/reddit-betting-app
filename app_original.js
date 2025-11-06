@@ -1,23 +1,12 @@
 // ===== CONFIGURATION =====
-// Both backends now run on the same port (5002) - use current origin for both
-const API_BASE_URL = window.location.origin; // WebSearch backend enabled - searches Google News
-
-// Bettit API URL - use current origin so it works with both localhost and ngrok
-const BETTIT_API_URL = window.location.origin;
+// Set this to your backend URL if using WebSearch backend
+// Leave as null to use RSS/Google News fallback
+const API_BASE_URL = 'http://localhost:5001'; // WebSearch backend enabled - searches Google News
 
 // ===== STATE MANAGEMENT =====
 const AppState = {
     currentScreen: 'loading',
     currentTab: 'feed',
-
-    // Authentication
-    isAuthenticated: false,
-    currentUser: null, // { id, username, email, balance, etc. }
-
-    // Markets (replaces articles for betting mode)
-    markets: [],
-    userBets: [],
-
     userPreferences: {
         interests: [],
         likedArticles: [],
@@ -31,19 +20,13 @@ const AppState = {
         darkMode: false
     },
     articles: [],
-    searchResults: [], // Articles from web search/exploration
-    originalArticles: null, // Backup of original feed before web search
     currentCardIndex: 0,
     cardHistory: [], // Track swiped cards for undo
     stats: {
         articlesRead: 0,
         streak: 0,
         lastReadDate: null
-    },
-    modalExplorer: null, // Initialized in initialize()
-    currentModalFilter: null,
-    currentSearchQuery: null,
-    currentModalArticle: null // Currently viewed article in modal
+    }
 };
 
 // ===== RSS FEEDS BY TOPIC =====
@@ -954,200 +937,6 @@ class CardSwiper {
     }
 }
 
-// ===== MODAL EXPLORER =====
-class ModalExplorer {
-    constructor() {
-        this.currentMode = null;
-        this.userModalProfile = this.loadModalProfile();
-        this.modalDescriptions = {
-            'NET': {
-                label: "What's Resonating",
-                hint: "Viral & trending stories",
-                description: "Explore what's gaining traction and social proof",
-                icon: "🌐"
-            },
-            'REF': {
-                label: "What's Verified",
-                hint: "Well-sourced & fact-checked",
-                description: "Dive into evidence-based discussions",
-                icon: "📚"
-            },
-            'POL': {
-                label: "What's Contested",
-                hint: "Systemic debate",
-                description: "Engage with power structures and political analysis",
-                icon: "⚖️"
-            },
-            'MOR': {
-                label: "What's Ethical",
-                hint: "Moral reasoning",
-                description: "Explore ethical dimensions and values",
-                icon: "💭"
-            },
-            'LAW': {
-                label: "What's Actionable",
-                hint: "Legal accountability",
-                description: "Follow legal consequences and justice",
-                icon: "⚖️"
-            }
-        };
-    }
-
-    loadModalProfile() {
-        const profile = localStorage.getItem('modalProfile');
-        return profile ? JSON.parse(profile) : {
-            NET: 0,
-            REF: 0,
-            POL: 0,
-            MOR: 0,
-            LAW: 0,
-            history: [],
-            lastUpdated: Date.now()
-        };
-    }
-
-    saveModalProfile() {
-        this.userModalProfile.lastUpdated = Date.now();
-        localStorage.setItem('modalProfile', JSON.stringify(this.userModalProfile));
-    }
-
-    trackModalInteraction(article, action) {
-        if (!article.modal_signature) return { isCrossover: false };
-
-        const mode = article.modal_signature.dominant;
-        if (!mode) return { isCrossover: false };
-
-        // Get top 2 modes BEFORE this interaction
-        const topModesBefore = this.getTopModes(2);
-        const isNewMode = !topModesBefore.includes(mode);
-
-        // Weight: like = +1, read = +0.5, pass = -0.3
-        const weights = {
-            'like': 1.0,
-            'read': 0.5,
-            'pass': -0.3
-        };
-        const weight = weights[action] || 0;
-
-        // Update mode score (normalize between 0-1)
-        this.userModalProfile[mode] = Math.max(0, Math.min(1, (this.userModalProfile[mode] || 0.6) + (weight * 0.1)));
-
-        // Track in history
-        this.userModalProfile.history.push({
-            mode,
-            pathway: article.modal_signature.pathway,
-            complexity: article.modal_signature.complexity,
-            action,
-            timestamp: Date.now()
-        });
-
-        // Keep only last 100 interactions
-        if (this.userModalProfile.history.length > 100) {
-            this.userModalProfile.history = this.userModalProfile.history.slice(-100);
-        }
-
-        this.saveModalProfile();
-
-        console.log(`[ModalEvolution] ${action} on ${mode} article. Score: ${this.userModalProfile[mode].toFixed(2)}`);
-
-        // Check if this was a crossover (engaging with non-top-2 mode positively)
-        const isCrossover = isNewMode && (action === 'like' || action === 'read');
-
-        if (isCrossover) {
-            console.log(`[ModalExpansion] Crossover detected! User engaged with ${mode} (outside top 2: ${topModesBefore.join(', ')})`);
-        }
-
-        return {
-            isCrossover,
-            mode,
-            topModesBefore,
-            newScore: this.userModalProfile[mode]
-        };
-    }
-
-    getTopModes(count = 2) {
-        return Object.entries(this.userModalProfile)
-            .filter(([key]) => ['NET', 'REF', 'POL', 'MOR', 'LAW'].includes(key))
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, count)
-            .map(([mode]) => mode);
-    }
-
-    async searchByMode(query, modalFilter = null, sortBy = 'relevance') {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/search/reddit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query,
-                    modal_filter: modalFilter,
-                    sort_by: sortBy,
-                    limit: 20
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.results || [];
-        } catch (error) {
-            console.error('Modal search failed:', error);
-            return [];
-        }
-    }
-
-    getModalRecommendation() {
-        // Find least-explored mode
-        const scores = Object.entries(this.userModalProfile)
-            .filter(([k]) => ['NET', 'REF', 'POL', 'MOR', 'LAW'].includes(k))
-            .sort(([,a], [,b]) => a - b);
-
-        if (scores.length === 0) {
-            return { mode: 'REF', reason: this.modalDescriptions['REF'].description };
-        }
-
-        const leastUsed = scores[0][0];
-        return {
-            mode: leastUsed,
-            reason: this.modalDescriptions[leastUsed].description
-        };
-    }
-
-    getModalStats() {
-        const interactions = this.userModalProfile.history.length;
-        const uniquePathways = new Set(
-            this.userModalProfile.history
-                .map(h => h.pathway)
-                .filter(p => p)
-        ).size;
-
-        const avgComplexity = this.userModalProfile.history
-            .filter(h => h.complexity)
-            .reduce((sum, h) => sum + h.complexity, 0) / Math.max(1, this.userModalProfile.history.length);
-
-        return {
-            total_interactions: interactions,
-            unique_pathways: uniquePathways,
-            average_complexity: avgComplexity.toFixed(1)
-        };
-    }
-
-    clearProfile() {
-        this.userModalProfile = {
-            NET: 0,
-            REF: 0,
-            POL: 0,
-            MOR: 0,
-            LAW: 0,
-            history: [],
-            lastUpdated: Date.now()
-        };
-        this.saveModalProfile();
-    }
-}
-
 // ===== UI CONTROLLER =====
 class UIController {
     static showScreen(screenId) {
@@ -1189,8 +978,6 @@ class UIController {
         // Load view-specific content
         if (tabName === 'explore') {
             this.renderExploreView();
-        } else if (tabName === 'discussions') {
-            this.renderDiscussionsView();
         } else if (tabName === 'insights') {
             this.renderInsightsView();
         }
@@ -1241,13 +1028,7 @@ class UIController {
             readBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
-
-                // For Reddit posts, open URL directly in new tab
-                if ((article.type === 'reddit_discussion' || article.id?.startsWith('reddit_')) && article.url) {
-                    window.open(article.url, '_blank');
-                } else {
-                    this.showArticleDetail(article);
-                }
+                this.showArticleDetail(article);
             });
         }
 
@@ -1278,306 +1059,46 @@ class UIController {
         return card;
     }
 
-    static calculateModalMatch(article, modalProfile) {
-        // If no modal signature, return neutral score
-        if (!article.modal_signature || !article.modal_signature.dominant) {
-            return 0.5;
-        }
-
-        const dominantMode = article.modal_signature.dominant;
-
-        // Get user's affinity for this mode (0-1 range)
-        const modeScore = modalProfile[dominantMode] || 0.6; // Default to 0.6 if missing
-
-        // Consider complexity bonus (more complex = slightly higher match)
-        const complexity = article.modal_signature.complexity || 1;
-        const complexityBonus = Math.min(complexity * 0.05, 0.2);
-
-        return Math.min(modeScore + complexityBonus, 1.0);
-    }
-
     static async renderFeed() {
         const tiktokFeed = document.getElementById('tiktok-feed');
         tiktokFeed.innerHTML = '';
 
-        console.log(`renderFeed: Starting with ${AppState.articles.length} articles and ${AppState.markets.length} markets`);
+        console.log(`renderFeed: Starting with ${AppState.articles.length} articles`);
 
-        // If authenticated, load markets and show mixed feed
-        if (AppState.isAuthenticated) {
-            // Load markets if not already loaded
-            if (AppState.markets.length === 0) {
-                console.log('Loading markets for authenticated user...');
-                await loadMarketsFromBackend();
-            }
+        // Get personalized articles
+        const rankedArticles = PersonalizationEngine.rankArticles(
+            AppState.articles,
+            AppState.userPreferences
+        );
 
-            // Create mixed feed: alternate between articles and markets
-            let rankedArticles = [...AppState.articles];
+        // Show only unread articles
+        const unreadArticles = rankedArticles.filter(
+            article => !AppState.userPreferences.readArticles.includes(article.id)
+        );
 
-            // Apply modal-driven filtering if modal profile exists
-            if (AppState.modalExplorer && AppState.modalExplorer.userModalProfile) {
-                const modalProfile = AppState.modalExplorer.userModalProfile;
-                const hasModalData = rankedArticles.some(a => a.modal_signature);
+        console.log(`renderFeed: ${unreadArticles.length} unread articles`);
 
-                if (hasModalData) {
-                    console.log('[ModalFeed] Applying modal filtering');
-
-                    // Calculate modal match scores
-                    rankedArticles.forEach(article => {
-                        article.modalMatchScore = this.calculateModalMatch(article, modalProfile);
-                    });
-
-                    // Sort by modal match
-                    rankedArticles.sort((a, b) => (b.modalMatchScore || 0) - (a.modalMatchScore || 0));
-
-                    // Get top 2 user modes
-                    const topModes = Object.entries(modalProfile)
-                        .filter(([key]) => ['NET', 'REF', 'POL', 'MOR', 'LAW'].includes(key))
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 2)
-                        .map(([mode]) => mode);
-
-                    console.log(`[ModalFeed] User's top modes: ${topModes.join(', ')}`);
-
-                    // Apply 80/20 split
-                    const splitPoint = Math.floor(rankedArticles.length * 0.8);
-                    const primaryArticles = rankedArticles.slice(0, splitPoint);
-                    const exploratoryArticles = rankedArticles.slice(splitPoint);
-
-                    // Mark exploratory articles
-                    exploratoryArticles.forEach(article => {
-                        article.isExploratory = true;
-                    });
-
-                    rankedArticles = [...primaryArticles, ...exploratoryArticles];
-                    console.log(`[ModalFeed] Feed: ${primaryArticles.length} primary, ${exploratoryArticles.length} exploratory`);
-                }
-            }
-
-            // Fall back to PersonalizationEngine for articles without modal data
-            if (rankedArticles.every(a => !a.modalMatchScore)) {
-                rankedArticles = PersonalizationEngine.rankArticles(
-                    AppState.articles,
-                    AppState.userPreferences
-                );
-            }
-
-            // Show only unread articles
-            const unreadArticles = rankedArticles.filter(
-                article => !AppState.userPreferences.readArticles.includes(article.id)
-            );
-
-            // Get open markets
-            const openMarkets = AppState.markets.filter(m => m.status === 'open');
-
-            // Sort markets by creation date (newest first)
-            openMarkets.sort((a, b) => {
-                const dateA = new Date(a.created_at);
-                const dateB = new Date(b.created_at);
-                return dateB - dateA;
-            });
-
-            console.log(`renderFeed: ${unreadArticles.length} articles, ${openMarkets.length} markets`);
-
-            if (unreadArticles.length === 0 && openMarkets.length === 0) {
-                console.log('renderFeed: No content to show');
-                document.getElementById('empty-state').style.display = 'block';
-                return;
-            }
-
-            document.getElementById('empty-state').style.display = 'none';
-
-            // Create mixed feed: alternate 2 articles, 1 market pattern
-            let articleIndex = 0;
-            let marketIndex = 0;
-            let articleCount = 0;
-
-            while (articleIndex < unreadArticles.length || marketIndex < openMarkets.length) {
-                // Add 2 articles
-                for (let i = 0; i < 2 && articleIndex < unreadArticles.length; i++) {
-                    const article = unreadArticles[articleIndex++];
-
-                    // Auto-summarize with Claude if enabled
-                    if (AppState.userPreferences.autoSummarize && AppState.userPreferences.apiKey && !article.aiSummary) {
-                        const claude = new ClaudeAPI(AppState.userPreferences.apiKey);
-                        article.aiSummary = await claude.generateSummary(article.content, article.title);
-                    }
-
-                    const articleEl = this.createTikTokArticle(article);
-                    tiktokFeed.appendChild(articleEl);
-                    articleCount++;
-                }
-
-                // Add 1 market
-                if (marketIndex < openMarkets.length) {
-                    const market = openMarkets[marketIndex++];
-                    if (typeof BettitMarket !== 'undefined') {
-                        const marketEl = BettitMarket.createMarketCard(market);
-                        tiktokFeed.appendChild(marketEl);
-                    }
-                }
-            }
-
-            console.log(`Rendered mixed feed: ${articleCount} articles + ${marketIndex} markets`);
-
-        } else {
-            // Guest user: show mixed feed (articles + markets), but can't place bets until logged in
-            let rankedArticles = [...AppState.articles];
-
-            // Apply modal-driven filtering if modal profile exists
-            if (AppState.modalExplorer && AppState.modalExplorer.userModalProfile) {
-                const modalProfile = AppState.modalExplorer.userModalProfile;
-                const hasModalData = rankedArticles.some(a => a.modal_signature);
-
-                if (hasModalData) {
-                    console.log('[ModalFeed] Applying modal filtering');
-
-                    // Calculate modal match scores
-                    rankedArticles.forEach(article => {
-                        article.modalMatchScore = this.calculateModalMatch(article, modalProfile);
-                    });
-
-                    // Sort by modal match
-                    rankedArticles.sort((a, b) => (b.modalMatchScore || 0) - (a.modalMatchScore || 0));
-
-                    // Get top 2 user modes
-                    const topModes = Object.entries(modalProfile)
-                        .filter(([key]) => ['NET', 'REF', 'POL', 'MOR', 'LAW'].includes(key))
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 2)
-                        .map(([mode]) => mode);
-
-                    console.log(`[ModalFeed] User's top modes: ${topModes.join(', ')}`);
-
-                    // Apply 80/20 split
-                    const splitPoint = Math.floor(rankedArticles.length * 0.8);
-                    const primaryArticles = rankedArticles.slice(0, splitPoint);
-                    const exploratoryArticles = rankedArticles.slice(splitPoint);
-
-                    // Mark exploratory articles
-                    exploratoryArticles.forEach(article => {
-                        article.isExploratory = true;
-                    });
-
-                    rankedArticles = [...primaryArticles, ...exploratoryArticles];
-                    console.log(`[ModalFeed] Feed: ${primaryArticles.length} primary, ${exploratoryArticles.length} exploratory`);
-                }
-            }
-
-            // Fall back to PersonalizationEngine for articles without modal data
-            if (rankedArticles.every(a => !a.modalMatchScore)) {
-                rankedArticles = PersonalizationEngine.rankArticles(
-                    AppState.articles,
-                    AppState.userPreferences
-                );
-            }
-
-            // Show only unread articles
-            const unreadArticles = rankedArticles.filter(
-                article => !AppState.userPreferences.readArticles.includes(article.id)
-            );
-
-            // Get open markets
-            const openMarkets = AppState.markets.filter(m => m.status === 'open');
-
-            // Sort markets by creation date (newest first)
-            openMarkets.sort((a, b) => {
-                const dateA = new Date(a.created_at);
-                const dateB = new Date(b.created_at);
-                return dateB - dateA;
-            });
-
-            console.log(`renderFeed: ${unreadArticles.length} articles, ${openMarkets.length} markets`);
-
-            if (unreadArticles.length === 0 && openMarkets.length === 0) {
-                console.log('renderFeed: No content to show');
-                document.getElementById('empty-state').style.display = 'block';
-                return;
-            }
-
-            document.getElementById('empty-state').style.display = 'none';
-
-            // Create mixed feed: alternate 2 articles, 1 market pattern
-            let articleIndex = 0;
-            let marketIndex = 0;
-            let articleCount = 0;
-
-            while (articleIndex < unreadArticles.length || marketIndex < openMarkets.length) {
-                // Add 2 articles
-                for (let i = 0; i < 2 && articleIndex < unreadArticles.length; i++) {
-                    const article = unreadArticles[articleIndex++];
-
-                    // Auto-summarize with Claude if enabled
-                    if (AppState.userPreferences.autoSummarize && AppState.userPreferences.apiKey && !article.aiSummary) {
-                        const claude = new ClaudeAPI(AppState.userPreferences.apiKey);
-                        article.aiSummary = await claude.generateSummary(article.content, article.title);
-                    }
-
-                    const articleEl = this.createTikTokArticle(article);
-                    tiktokFeed.appendChild(articleEl);
-                    articleCount++;
-                }
-
-                // Add 1 market
-                if (marketIndex < openMarkets.length) {
-                    const market = openMarkets[marketIndex++];
-                    if (typeof BettitMarket !== 'undefined') {
-                        const marketEl = BettitMarket.createMarketCard(market);
-                        tiktokFeed.appendChild(marketEl);
-                    }
-                }
-            }
-
-            console.log(`Rendered mixed feed: ${articleCount} articles + ${marketIndex} markets`);
-        }
-
-        // Track which article/market is currently visible
-        this.setupScrollTracking();
-    }
-
-    // ===== MARKET FEED RENDERING (BETTIT) =====
-    static async renderMarketFeed() {
-        const tiktokFeed = document.getElementById('tiktok-feed');
-        tiktokFeed.innerHTML = '';
-
-        console.log(`renderMarketFeed: Starting with ${AppState.markets.length} markets`);
-
-        if (AppState.markets.length === 0) {
-            // Show loading state
-            tiktokFeed.innerHTML = '<div class="loading-message">Loading markets...</div>';
-
-            // Load markets from backend
-            await loadMarketsFromBackend();
-
-            if (AppState.markets.length === 0) {
-                document.getElementById('empty-state').style.display = 'block';
-                tiktokFeed.innerHTML = '';
-                return;
-            }
+        if (unreadArticles.length === 0) {
+            console.log('renderFeed: No unread articles, showing empty state');
+            document.getElementById('empty-state').style.display = 'block';
+            return;
         }
 
         document.getElementById('empty-state').style.display = 'none';
 
-        // Filter open markets
-        const openMarkets = AppState.markets.filter(m => m.status === 'open');
-
-        // Sort by creation date (newest first) or by activity
-        openMarkets.sort((a, b) => {
-            const dateA = new Date(a.created_at);
-            const dateB = new Date(b.created_at);
-            return dateB - dateA;
-        });
-
-        // Render market cards
-        for (const market of openMarkets) {
-            if (typeof BettitMarket !== 'undefined') {
-                const marketEl = BettitMarket.createMarketCard(market);
-                tiktokFeed.appendChild(marketEl);
+        // Render all unread articles
+        for (const article of unreadArticles) {
+            // Auto-summarize with Claude if enabled
+            if (AppState.userPreferences.autoSummarize && AppState.userPreferences.apiKey && !article.aiSummary) {
+                const claude = new ClaudeAPI(AppState.userPreferences.apiKey);
+                article.aiSummary = await claude.generateSummary(article.content, article.title);
             }
+
+            const articleEl = this.createTikTokArticle(article);
+            tiktokFeed.appendChild(articleEl);
         }
 
-        console.log(`Rendered ${openMarkets.length} markets`);
-
-        // Track which market is currently visible
+        // Track which article is currently visible
         this.setupScrollTracking();
     }
 
@@ -1588,29 +1109,6 @@ class UIController {
 
         const summary = article.aiSummary || article.summary;
 
-        // Modal exploration badge if article is exploratory
-        let exploratoryBadge = '';
-        if (article.isExploratory && article.modal_signature) {
-            const modeIcons = {
-                'NET': '🌐',
-                'REF': '📚',
-                'POL': '⚙️',
-                'MOR': '💗',
-                'LAW': '⚖️'
-            };
-            const modeLabels = {
-                'NET': "What's Resonating",
-                'REF': 'Evidence-Based',
-                'POL': 'Systems Critique',
-                'MOR': 'Moral Lens',
-                'LAW': 'Legal View'
-            };
-            const mode = article.modal_signature.dominant;
-            const icon = modeIcons[mode] || '🔍';
-            const label = modeLabels[mode] || mode;
-            exploratoryBadge = `<div class="exploratory-badge">${icon} Try: ${label}</div>`;
-        }
-
         articleDiv.innerHTML = `
             <img src="${article.image}" alt="${article.title}" class="card-image" onerror="this.src='https://via.placeholder.com/600x250/6366f1/ffffff?text=News'">
             <div class="card-content">
@@ -1619,26 +1117,14 @@ class UIController {
                     <span class="topic-tag">${article.topic}</span>
                     <span class="topic-tag">${article.readTime} min read</span>
                 </div>
-                ${exploratoryBadge}
                 <h2 class="card-title" style="cursor: pointer;">${article.title}</h2>
                 ${article.aiSummary ? '<div class="ai-badge">✨ AI Summary</div>' : ''}
                 <p class="card-summary">${summary}</p>
             </div>
-            <!-- Betting Actions for ALL Users (Guests and Authenticated) -->
-            <div class="tiktok-actions">
-                <button class="tiktok-action-btn article-bet-yes-btn" data-article-id="${article.id}" title="Bet YES on this story">
-                    <span style="font-size: 1.2rem;">👍</span>
-                    <span style="font-size: 0.75rem;">YES</span>
-                </button>
-                <button class="tiktok-action-btn article-details-btn" data-article-id="${article.id}" title="Read Full Article">
-                    📖
-                </button>
-                <button class="tiktok-action-btn article-bet-no-btn" data-article-id="${article.id}" title="Bet NO on this story">
-                    <span style="font-size: 1.2rem;">👎</span>
-                    <span style="font-size: 0.75rem;">NO</span>
-                </button>
-                <button class="tiktok-action-btn article-create-market-btn" data-article-id="${article.id}" title="Create Market">
-                    💰
+            <div class="card-footer-actions">
+                <button class="card-footer-btn read-btn" data-article-id="${article.id}">
+                    <span class="btn-icon">📖</span>
+                    <span class="btn-label">Read Full Article</span>
                 </button>
             </div>
         `;
@@ -1652,179 +1138,16 @@ class UIController {
             });
         }
 
-        // Add click handlers for betting buttons (for ALL users)
-        const betYesBtn = articleDiv.querySelector('.article-bet-yes-btn');
-        const betNoBtn = articleDiv.querySelector('.article-bet-no-btn');
-        const detailsBtn = articleDiv.querySelector('.article-details-btn');
-        const createMarketBtn = articleDiv.querySelector('.article-create-market-btn');
-
-        if (betYesBtn) {
-            betYesBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await this.handleArticleBet(article, 'YES');
-            });
-        }
-
-        if (betNoBtn) {
-            betNoBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await this.handleArticleBet(article, 'NO');
-            });
-        }
-
-        if (detailsBtn) {
-            detailsBtn.addEventListener('click', (e) => {
+        // Add click handler for read button
+        const readBtn = articleDiv.querySelector('.read-btn');
+        if (readBtn) {
+            readBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.showArticleDetail(article);
             });
         }
 
-        if (createMarketBtn) {
-            createMarketBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                await createMarketFromArticle(article);
-            });
-        }
-
         return articleDiv;
-    }
-
-    static async handleArticleBet(article, outcome) {
-        // Check if article already has an associated market
-        let market = AppState.markets.find(m =>
-            m.source_article_url === article.url ||
-            m.source_article_title === article.title
-        );
-
-        if (!market) {
-            // Auto-create market from article
-            console.log(`Creating market for article: ${article.title}`);
-
-            const question = `Will "${article.title.replace(/\?$/, '')}" be confirmed by mainstream media?`;
-            const description = article.summary || article.content?.substring(0, 200) || 'No description available';
-
-            const result = await bettitAPI.createMarket({
-                question,
-                description,
-                resolutionCriteria: 'This market will resolve based on reporting from major news outlets (NYT, WSJ, BBC, Reuters, AP) within 7 days.',
-                resolutionHours: 168, // 1 week
-                community: article.topic || 'general',
-                sourceUrl: article.url,
-                sourceTitle: article.title,
-                imageUrl: article.image
-            });
-
-            if (!result.success) {
-                alert(`Error creating market: ${result.error}`);
-                return;
-            }
-
-            market = result.data.market;
-            AppState.markets.unshift(market);
-            console.log('✅ Market created:', market);
-        }
-
-        // Show betting interface for this market
-        if (typeof BettitMarket !== 'undefined' && BettitMarket.showBettingInterface) {
-            BettitMarket.showBettingInterface(market, outcome);
-        } else {
-            console.error('BettitMarket not available');
-        }
-    }
-
-    static async handleRedditBet(article, outcome) {
-        console.log('📊 Reddit betting clicked:', article.title);
-
-        // Check if Reddit post already has an associated market
-        let market = AppState.markets.find(m =>
-            m.source_metadata?.reddit_id === article.id?.replace('reddit_', '')
-        );
-
-        if (!market) {
-            // Show market type selection modal
-            const marketType = await UIController.showRedditMarketTypeModal(article);
-
-            if (!marketType) {
-                console.log('User cancelled market type selection');
-                return;
-            }
-
-            console.log(`Creating ${marketType} market for Reddit post...`);
-
-            // Create Reddit market via API
-            const redditPost = {
-                id: article.id?.replace('reddit_', ''),
-                title: article.title,
-                url: article.url,
-                subreddit: article.source?.replace('r/', ''),
-                score: article.reddit_score || 0,
-                num_comments: article.reddit_comments || 0,
-                created_utc: Math.floor(new Date(article.publishedAt).getTime() / 1000)
-            };
-
-            const result = await bettitAPI.createRedditMarket(redditPost, marketType);
-
-            if (!result.success) {
-                alert(`Error creating market: ${result.error}`);
-                return;
-            }
-
-            market = result.data.market;
-            AppState.markets.unshift(market);
-            console.log('✅ Reddit market created:', market);
-        }
-
-        // Show betting interface for this market
-        if (typeof BettitMarket !== 'undefined' && BettitMarket.showBettingInterface) {
-            BettitMarket.showBettingInterface(market, outcome);
-        } else {
-            console.error('BettitMarket not available');
-        }
-    }
-
-    static showRedditMarketTypeModal(article) {
-        return new Promise((resolve) => {
-            const modal = document.getElementById('reddit-market-modal');
-            const buttons = modal.querySelectorAll('.market-type-btn');
-            const closeBtn = modal.querySelector('.modal-close');
-
-            // Show modal
-            modal.style.display = 'flex';
-
-            // Handle button clicks
-            const handleSelection = (marketType) => {
-                modal.style.display = 'none';
-                cleanup();
-                resolve(marketType);
-            };
-
-            const handleClose = () => {
-                modal.style.display = 'none';
-                cleanup();
-                resolve(null);
-            };
-
-            const cleanup = () => {
-                buttons.forEach(btn => btn.removeEventListener('click', btn._clickHandler));
-                closeBtn.removeEventListener('click', handleClose);
-                modal.removeEventListener('click', handleOutsideClick);
-            };
-
-            const handleOutsideClick = (e) => {
-                if (e.target === modal) {
-                    handleClose();
-                }
-            };
-
-            // Attach event listeners
-            buttons.forEach(btn => {
-                btn._clickHandler = () => handleSelection(btn.dataset.type);
-                btn.addEventListener('click', btn._clickHandler);
-            });
-
-            closeBtn.addEventListener('click', handleClose);
-            modal.addEventListener('click', handleOutsideClick);
-        });
     }
 
     static setupScrollTracking() {
@@ -2016,16 +1339,6 @@ class UIController {
             return;
         }
 
-        // NEW: Track modal interaction and check for crossovers
-        if (AppState.modalExplorer && article.modal_signature) {
-            const result = AppState.modalExplorer.trackModalInteraction(article, action);
-
-            // Show expansion prompt if crossover detected
-            if (result && result.isCrossover) {
-                this.showModalExpansionPrompt(result.mode, article);
-            }
-        }
-
         // Save to storage
         Storage.save('userPreferences', AppState.userPreferences);
         Storage.save('stats', AppState.stats);
@@ -2034,89 +1347,6 @@ class UIController {
         setTimeout(() => {
             this.renderFeed();
         }, 100);
-    }
-
-    static showModalExpansionPrompt(mode, article) {
-        const modeLabels = {
-            'NET': "What's Resonating",
-            'REF': 'Evidence-Based',
-            'POL': 'Systems Critique',
-            'MOR': 'Moral Lens',
-            'LAW': 'Legal View'
-        };
-        const modeDescriptions = {
-            'NET': 'viral & trending stories',
-            'REF': 'sources & research',
-            'POL': 'power dynamics',
-            'MOR': 'ethical perspectives',
-            'LAW': 'legal accountability'
-        };
-
-        const modeIcons = {
-            'NET': '🌐',
-            'REF': '📚',
-            'POL': '⚙️',
-            'MOR': '💗',
-            'LAW': '⚖️'
-        };
-
-        const label = modeLabels[mode] || mode;
-        const description = modeDescriptions[mode] || mode;
-        const icon = modeIcons[mode] || '🔍';
-
-        // Create expansion card
-        const tiktokFeed = document.getElementById('tiktok-feed');
-        const expansionCard = document.createElement('div');
-        expansionCard.className = 'tiktok-article expansion-card';
-
-        expansionCard.innerHTML = `
-            <div class="expansion-content">
-                <div class="expansion-icon">${icon}</div>
-                <h2 class="expansion-title">Expanding Your Lens</h2>
-                <p class="expansion-message">You engaged with a <strong>${label}</strong> article! Want to explore more ${description}?</p>
-
-                <div class="expansion-actions">
-                    <button class="expansion-btn explore-btn" data-mode="${mode}">
-                        Explore ${label}
-                    </button>
-                    <button class="expansion-btn dismiss-btn">
-                        Not Now
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Add event listeners
-        const exploreBtn = expansionCard.querySelector('.explore-btn');
-        const dismissBtn = expansionCard.querySelector('.dismiss-btn');
-
-        exploreBtn.addEventListener('click', () => {
-            // Boost this mode
-            if (AppState.modalExplorer) {
-                AppState.modalExplorer.userModalProfile[mode] = Math.min(1, AppState.modalExplorer.userModalProfile[mode] + 0.2);
-                AppState.modalExplorer.saveModalProfile();
-                console.log(`[ModalExpansion] Boosted ${mode} by 0.2`);
-            }
-
-            // Remove expansion card
-            expansionCard.remove();
-
-            // Re-render feed with boosted mode
-            setTimeout(() => {
-                this.renderFeed();
-            }, 100);
-        });
-
-        dismissBtn.addEventListener('click', () => {
-            expansionCard.remove();
-        });
-
-        // Insert at the beginning of feed (next card)
-        if (tiktokFeed.firstChild) {
-            tiktokFeed.insertBefore(expansionCard, tiktokFeed.firstChild.nextSibling);
-        } else {
-            tiktokFeed.appendChild(expansionCard);
-        }
     }
 
     static async showArticleDetail(article) {
@@ -2148,17 +1378,6 @@ class UIController {
         // Show initial content
         renderContent(article.content);
         modal.classList.add('active');
-
-        // Show appropriate action buttons based on auth status
-        const guestActions = document.getElementById('article-actions-guest');
-        const authActions = document.getElementById('article-actions-auth');
-        if (AppState.isAuthenticated) {
-            guestActions.style.display = 'none';
-            authActions.style.display = 'flex';
-        } else {
-            guestActions.style.display = 'flex';
-            authActions.style.display = 'none';
-        }
 
         // If content is short and we have a URL, try to fetch full content with Claude
         if (article.url && article.content.length < 500 && AppState.userPreferences.apiKey) {
@@ -2210,13 +1429,7 @@ class UIController {
                 if (readBtn) {
                     readBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-
-                        // For Reddit posts, open URL directly in new tab
-                        if ((article.type === 'reddit_discussion' || article.id?.startsWith('reddit_')) && article.url) {
-                            window.open(article.url, '_blank');
-                        } else {
-                            this.showArticleDetail(article);
-                        }
+                        this.showArticleDetail(article);
                     });
                 }
 
@@ -2247,26 +1460,6 @@ class UIController {
                         e.stopPropagation();
                         this.exploreTopicWithAI(article);
                     });
-                }
-
-                // Betting buttons (authenticated users)
-                if (AppState.isAuthenticated) {
-                    const betYesBtn = cardEl.querySelector('.bet-yes-btn');
-                    const betNoBtn = cardEl.querySelector('.bet-no-btn');
-
-                    if (betYesBtn) {
-                        betYesBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            await this.handleArticleBet(article, 'YES');
-                        });
-                    }
-
-                    if (betNoBtn) {
-                        betNoBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            await this.handleArticleBet(article, 'NO');
-                        });
-                    }
                 }
             }
         });
@@ -2314,17 +1507,10 @@ class UIController {
                     <p class="list-card-summary">${summary}</p>
 
                     <div class="list-card-actions">
-                        ${AppState.isAuthenticated ? `
-                            <button class="list-action-btn bet-yes-btn" title="Bet YES on this story">👍</button>
-                            <button class="list-action-btn read-btn" title="Read">📖</button>
-                            <button class="list-action-btn bet-no-btn" title="Bet NO on this story">👎</button>
-                            <button class="list-action-btn more-btn" title="Find more like this">+</button>
-                        ` : `
-                            <button class="list-action-btn dislike-btn" data-action="skip" title="Pass">👎</button>
-                            <button class="list-action-btn read-btn" title="Read">📖</button>
-                            <button class="list-action-btn like-btn" data-action="like" title="Like">❤️</button>
-                            <button class="list-action-btn more-btn" title="Find more like this">+</button>
-                        `}
+                        <button class="list-action-btn dislike-btn" data-action="skip" title="Pass">👎</button>
+                        <button class="list-action-btn read-btn" title="Read">📖</button>
+                        <button class="list-action-btn like-btn" data-action="like" title="Like">❤️</button>
+                        <button class="list-action-btn more-btn" title="Find more like this">+</button>
                     </div>
                 </div>
             </div>
@@ -2394,7 +1580,7 @@ class UIController {
         loadingMsg.className = 'ai-analysis-banner loading';
         loadingMsg.innerHTML = `
             <div class="loading-spinner"></div>
-            <p>🔍 Finding related articles about "${article.title.substring(0, 50)}..."</p>
+            <p>🤖 AI is analyzing "${article.title.substring(0, 50)}..." to find related content...</p>
         `;
 
         const feedElement = document.getElementById('search-feed');
@@ -2402,113 +1588,7 @@ class UIController {
         feedElement.appendChild(loadingMsg);
 
         try {
-            // If no API key, use simple backend search
-            if (!AppState.userPreferences.apiKey || AppState.userPreferences.apiKey === 'dummy_key') {
-                console.log('⚠️ No Claude API key - using backend search');
-
-                // Use backend search API directly with article title
-                loadingMsg.innerHTML = `
-                    <div class="loading-spinner"></div>
-                    <p>🌐 Searching for related articles...</p>
-                `;
-
-                // Fetch both Google News and Reddit in parallel
-                const [newsResponse, redditResponse] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/search`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            query: article.title,
-                            max_results: 15
-                        })
-                    }),
-                    fetch(`${API_BASE_URL}/api/search/reddit`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            query: article.title,
-                            sort_by: 'relevance',
-                            limit: 10
-                        })
-                    })
-                ]);
-
-                if (!newsResponse.ok) {
-                    throw new Error('Backend search failed');
-                }
-
-                const newsData = await newsResponse.json();
-                const redditData = redditResponse.ok ? await redditResponse.json() : { results: [] };
-
-                loadingMsg.remove();
-
-                // Mark Reddit posts
-                const redditPosts = (redditData.results || []).map(post => ({
-                    ...post,
-                    isReddit: true,
-                    type: 'reddit_discussion'
-                }));
-
-                // Mix Reddit with news articles
-                const allResults = mixRedditWithArticles(newsData.articles || [], redditPosts);
-
-                if (allResults.length === 0) {
-                    feedElement.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">🔍</div>
-                            <h3>No Related Content Found</h3>
-                            <p>Try exploring a different article</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                const data = { articles: allResults };
-
-                // Show Full Coverage banner
-                const banner = document.createElement('div');
-                banner.className = 'ai-analysis-banner';
-                banner.innerHTML = `
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3 style="margin: 0;">🔍 Full Coverage: "${article.title.substring(0, 60)}${article.title.length > 60 ? '...' : ''}"</h3>
-                            <button class="secondary-btn" id="clear-search-btn" style="flex-shrink: 0; padding: 0.5rem 1rem; font-size: 0.875rem;">
-                                ↩ Clear Search
-                            </button>
-                        </div>
-                        <p style="margin: 0; font-weight: 600; color: var(--primary-color);">
-                            ${(newsData.articles || []).length} articles + ${redditPosts.length} discussions • Click + to explore deeper
-                        </p>
-                    </div>
-                `;
-
-                // Store search results in AppState so event listeners can find them
-                AppState.searchResults = data.articles;
-
-                const cards = data.articles.map(a => this.createListArticleCard(a)).join('');
-                feedElement.innerHTML = banner.outerHTML + cards;
-
-                // Add clear button handler
-                const clearBtn = feedElement.querySelector('#clear-search-btn');
-                if (clearBtn) {
-                    clearBtn.addEventListener('click', () => {
-                        feedElement.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-icon">🔍</div>
-                                <h3>Search Google News</h3>
-                                <p>Search for any news topic and get fresh results from across the web</p>
-                            </div>
-                        `;
-                    });
-                }
-
-                // Attach event listeners for continuous exploration
-                this.attachExploreEventListeners(feedElement);
-                feedElement.scrollTop = 0;
-                return;
-            }
-
-            // Use Claude to analyze the article (if API key available)
+            // Use Claude to analyze the article
             const claude = new ClaudeAPI(AppState.userPreferences.apiKey);
             const analysis = await claude.exploreArticleThemes(article);
 
@@ -2700,23 +1780,22 @@ class UIController {
                 return;
             }
 
-            // Create banner with AI analysis (no exit button - allow continuous exploration)
+            // Create banner with AI analysis and exit button
             const analysisBanner = document.createElement('div');
             analysisBanner.className = 'ai-analysis-banner';
             analysisBanner.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0;">🔍 Exploring: "${(analysis.exactEvent || article.title).substring(0, 60)}${(analysis.exactEvent || article.title).length > 60 ? '...' : ''}"</h3>
-                        <button class="secondary-btn" id="clear-search-btn" style="flex-shrink: 0; padding: 0.5rem 1rem; font-size: 0.875rem;">
-                            ↩ Clear Search
-                        </button>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <h3>🔍 Full Coverage: "${analysis.exactEvent || article.title}"</h3>
+                        ${analysis.productNames && analysis.productNames.length > 0 ? `<p><strong>Products:</strong> ${analysis.productNames.join(', ')}</p>` : ''}
+                        ${analysis.companyNames && analysis.companyNames.length > 0 ? `<p><strong>Companies:</strong> ${analysis.companyNames.join(', ')}</p>` : ''}
+                        ${analysis.specificEntities && analysis.specificEntities.length > 0 ? `<p><strong>Key Details:</strong> ${analysis.specificEntities.slice(0, 5).join(', ')}</p>` : ''}
+                        ${analysis.dates && analysis.dates.length > 0 ? `<p><strong>Dates:</strong> ${analysis.dates.join(', ')}</p>` : ''}
+                        <p style="margin-top: 0.5rem; font-weight: 600;">Showing ${relatedArticles.length} related ${relatedArticles.length === 1 ? 'article' : 'articles'}</p>
                     </div>
-                    ${analysis.productNames && analysis.productNames.length > 0 ? `<p style="margin: 0;"><strong>Products:</strong> ${analysis.productNames.join(', ')}</p>` : ''}
-                    ${analysis.companyNames && analysis.companyNames.length > 0 ? `<p style="margin: 0;"><strong>Companies:</strong> ${analysis.companyNames.join(', ')}</p>` : ''}
-                    ${analysis.specificEntities && analysis.specificEntities.length > 0 ? `<p style="margin: 0;"><strong>Key Details:</strong> ${analysis.specificEntities.slice(0, 5).join(', ')}</p>` : ''}
-                    <p style="margin: 0; font-weight: 600; color: var(--primary-color);">
-                        ${relatedArticles.length} related ${relatedArticles.length === 1 ? 'article' : 'articles'} • Click + to explore deeper
-                    </p>
+                    <button class="secondary-btn" id="exit-full-coverage-btn" style="flex-shrink: 0;">
+                        ✕ Exit Full Coverage
+                    </button>
                 </div>
             `;
 
@@ -2724,18 +1803,12 @@ class UIController {
             const newCards = relatedArticles.map(a => this.createListArticleCard(a, a.matchInfo)).join('');
             feedElement.innerHTML = analysisBanner.outerHTML + newCards;
 
-            // Add clear search button handler
-            const clearBtn = feedElement.querySelector('#clear-search-btn');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', () => {
-                    // Clear search feed and show empty state
-                    feedElement.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">🔍</div>
-                            <h3>Search Google News</h3>
-                            <p>Search for any news topic and get fresh results from across the web</p>
-                        </div>
-                    `;
+            // Add exit button handler to return to previous tab
+            const exitBtn = feedElement.querySelector('#exit-full-coverage-btn');
+            if (exitBtn) {
+                exitBtn.addEventListener('click', () => {
+                    // Return to Explore view
+                    this.switchTab('explore');
                 });
             }
 
@@ -2769,21 +1842,15 @@ class UIController {
 
     static attachExploreEventListeners(exploreFeed) {
         exploreFeed.querySelectorAll('.list-card').forEach(cardEl => {
-            const articleId = cardEl.dataset.articleId;
-            const art = AppState.articles.find(a => a.id == articleId) || AppState.searchResults.find(a => a.id === articleId);
+            const articleId = parseInt(cardEl.dataset.articleId);
+            const art = AppState.articles.find(a => a.id === articleId);
 
             if (art) {
                 const readBtn = cardEl.querySelector('.read-btn');
                 if (readBtn) {
                     readBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-
-                        // For Reddit posts, open URL directly in new tab
-                        if ((art.type === 'reddit_discussion' || art.id?.startsWith('reddit_')) && art.url) {
-                            window.open(art.url, '_blank');
-                        } else {
-                            this.showArticleDetail(art);
-                        }
+                        this.showArticleDetail(art);
                     });
                 }
 
@@ -2811,26 +1878,6 @@ class UIController {
                         e.stopPropagation();
                         this.exploreTopicWithAI(art, 'explore');
                     });
-                }
-
-                // Betting buttons (authenticated users)
-                if (AppState.isAuthenticated) {
-                    const betYesBtn = cardEl.querySelector('.bet-yes-btn');
-                    const betNoBtn = cardEl.querySelector('.bet-no-btn');
-
-                    if (betYesBtn) {
-                        betYesBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            await this.handleArticleBet(art, 'YES');
-                        });
-                    }
-
-                    if (betNoBtn) {
-                        betNoBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            await this.handleArticleBet(art, 'NO');
-                        });
-                    }
                 }
             }
         });
@@ -2865,426 +1912,6 @@ class UIController {
 
         // Streak
         document.getElementById('streak-value').textContent = `${AppState.stats.streak} days`;
-
-        // Betting Performance
-        const activeBets = AppState.userBets.filter(bet => bet.status === 'active');
-        const totalStaked = activeBets.reduce((sum, bet) => sum + parseFloat(bet.amount), 0);
-        const potentialWinnings = activeBets.reduce((sum, bet) => sum + parseFloat(bet.potential_payout), 0);
-
-        // Update betting stats
-        document.getElementById('active-bets-count').textContent = activeBets.length;
-        document.getElementById('total-staked').textContent = `$${totalStaked.toFixed(2)}`;
-        document.getElementById('potential-winnings').textContent = `$${potentialWinnings.toFixed(2)}`;
-
-        // Render bets list
-        const betsList = document.getElementById('user-bets-list');
-        const noBetsMessage = document.getElementById('no-bets-message');
-
-        if (activeBets.length === 0) {
-            betsList.style.display = 'none';
-            noBetsMessage.style.display = 'block';
-        } else {
-            betsList.style.display = 'flex';
-            noBetsMessage.style.display = 'none';
-
-            betsList.innerHTML = activeBets.map(bet => {
-                // Find the associated market
-                const market = AppState.markets.find(m => m.id === bet.market_id);
-                const marketQuestion = market ? market.question : 'Unknown Market';
-
-                return `
-                    <div class="bet-card">
-                        <div class="bet-market-question">${marketQuestion}</div>
-                        <div class="bet-details">
-                            <span class="bet-outcome ${bet.outcome}">${bet.outcome}</span>
-                            <div class="bet-amounts">
-                                <span class="bet-staked">$${parseFloat(bet.amount).toFixed(2)}</span>
-                                <span class="bet-arrow">→</span>
-                                <span class="bet-payout">$${parseFloat(bet.potential_payout).toFixed(2)}</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // Modal Profile Dashboard
-        if (AppState.modalExplorer) {
-            const profile = AppState.modalExplorer.userModalProfile;
-            const stats = AppState.modalExplorer.getModalStats();
-            const hasInteractions = profile.history && profile.history.length > 0;
-
-            // Check if user has completed survey (has modal scores set)
-            const hasModalProfile = profile && (
-                profile.NET !== undefined ||
-                profile.REF !== undefined ||
-                profile.POL !== undefined ||
-                profile.MOR !== undefined ||
-                profile.LAW !== undefined
-            );
-
-            // Mode icons
-            const modeIcons = {
-                'NET': '🌐',
-                'REF': '📚',
-                'POL': '⚙️',
-                'MOR': '💗',
-                'LAW': '⚖️'
-            };
-
-            // Mode labels
-            const modeLabels = {
-                'NET': "What's Resonating",
-                'REF': 'Evidence-Based',
-                'POL': 'Systems Critique',
-                'MOR': 'Moral Reasoning',
-                'LAW': 'Legal View'
-            };
-
-            if (hasModalProfile) {
-                // Show stats
-                document.getElementById('modal-profile-content').style.display = 'none';
-                document.getElementById('modal-profile-stats').style.display = 'block';
-
-                // Update stat values (use 0 if no interactions yet)
-                document.getElementById('modal-total-interactions').textContent = stats.total_interactions || 0;
-                document.getElementById('modal-unique-pathways').textContent = stats.unique_pathways || 0;
-                document.getElementById('modal-avg-complexity').textContent = stats.average_complexity || 0;
-
-                // Calculate normalized scores (highest score = 100%)
-                const maxScore = Math.max(...Object.values(profile));
-                const sortedModes = Object.entries(profile)
-                    .filter(([key]) => ['NET', 'REF', 'POL', 'MOR', 'LAW'].includes(key))
-                    .sort((a, b) => b[1] - a[1]);
-
-                // Calculate exploration progress
-                const engagedModes = sortedModes.filter(([_, score]) => score > 0.6).length;
-                const totalModes = 5;
-                const explorationPercentage = (engagedModes / totalModes) * 100;
-
-                // Count crossover events from history (handle empty history)
-                const crossovers = profile.history ? profile.history.filter(event => {
-                    return event.action === 'like' || event.action === 'read';
-                }).length : 0;
-
-                // Render mode bars
-                const modalProfileBars = document.getElementById('modal-profile-bars');
-                modalProfileBars.innerHTML = sortedModes.map(([mode, score]) => {
-                    const normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
-                    const modeIcon = modeIcons[mode] || '🔍';
-                    const modeLabel = modeLabels[mode] || mode;
-                    const isExplored = score > 0.6;
-
-                    return `
-                        <div class="modal-profile-bar ${isExplored ? 'explored' : 'unexplored'}">
-                            <div class="modal-profile-bar-label">
-                                <span class="modal-mode-icon">${modeIcon}</span>
-                                <span>${modeLabel}</span>
-                                ${!isExplored ? '<span class="unexplored-badge">🔒 Unexplored</span>' : ''}
-                            </div>
-                            <div class="modal-profile-bar-fill">
-                                <div class="modal-profile-bar-value"
-                                     style="width: ${normalizedScore}%; background: var(--primary-color);">
-                                    <span class="modal-score-text">${score.toFixed(1)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-
-                // Add exploration progress section
-                const explorationSection = `
-                    <div class="exploration-progress">
-                        <h4>🌱 Modal Discovery Progress</h4>
-                        <div class="progress-stats">
-                            <div class="progress-stat">
-                                <div class="progress-stat-value">${engagedModes}/${totalModes}</div>
-                                <div class="progress-stat-label">Modes Explored</div>
-                            </div>
-                            <div class="progress-stat">
-                                <div class="progress-stat-value">${crossovers}</div>
-                                <div class="progress-stat-label">Crossover Events</div>
-                            </div>
-                            <div class="progress-stat">
-                                <div class="progress-stat-value">${explorationPercentage.toFixed(0)}%</div>
-                                <div class="progress-stat-label">Discovery Rate</div>
-                            </div>
-                        </div>
-                        <div class="exploration-bar">
-                            <div class="exploration-bar-fill" style="width: ${explorationPercentage}%"></div>
-                        </div>
-                    </div>
-                `;
-
-                modalProfileBars.insertAdjacentHTML('beforebegin', explorationSection);
-            } else {
-                // Show empty state
-                document.getElementById('modal-profile-content').style.display = 'block';
-                document.getElementById('modal-profile-stats').style.display = 'none';
-            }
-        }
-    }
-
-    static async renderDiscussionsView() {
-        console.log('Rendering Discussions view...');
-        const feed = document.getElementById('discussions-feed');
-
-        // Show loading state
-        feed.innerHTML = `
-            <div class="loading-state">
-                <div class="spinner"></div>
-                <p>Loading Reddit discussions...</p>
-            </div>
-        `;
-
-        // Fetch trending Reddit posts for popular topics
-        const defaultQuery = 'news technology politics science world';
-        const posts = await fetchRedditPosts(defaultQuery, 20);
-
-        if (posts.length === 0) {
-            feed.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">💬</div>
-                    <h3>No Discussions Found</h3>
-                    <p>Check back later for trending conversations</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Render cards
-        const cards = posts.map(post => this.createListArticleCard(post)).join('');
-        feed.innerHTML = cards;
-
-        // Add event listeners to cards
-        this.attachListCardListeners(posts, feed);
-
-        // Wire up search button
-        const searchBtn = document.getElementById('discussions-search-btn');
-        const searchInput = document.getElementById('discussions-search-input');
-
-        // Remove old listeners
-        const newSearchBtn = searchBtn.cloneNode(true);
-        searchBtn.parentNode.replaceChild(newSearchBtn, searchBtn);
-
-        newSearchBtn.addEventListener('click', async () => {
-            const query = searchInput.value.trim();
-            if (query) {
-                console.log(`Searching Reddit for: ${query}`);
-
-                // Show loading
-                feed.innerHTML = `
-                    <div class="loading-state">
-                        <div class="spinner"></div>
-                        <p>Searching Reddit...</p>
-                    </div>
-                `;
-
-                const results = await fetchRedditPosts(query, 30);
-
-                if (results.length === 0) {
-                    feed.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">🔍</div>
-                            <h3>No Results Found</h3>
-                            <p>Try different keywords or topics</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                const resultCards = results.map(post => this.createListArticleCard(post)).join('');
-                feed.innerHTML = resultCards;
-                this.attachListCardListeners(results, feed);
-            }
-        });
-
-        // Allow Enter key to search
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                newSearchBtn.click();
-            }
-        });
-    }
-
-    static createModalArticleCard(article) {
-        const summary = article.aiSummary || article.summary;
-        const modalSig = article.modal_signature;
-
-        // Modal mode icons
-        const modeIcons = {
-            'NET': '🌐',
-            'REF': '📚',
-            'POL': '⚙️',
-            'MOR': '💗',
-            'LAW': '⚖️'
-        };
-
-        // Build modal metadata badges
-        let modalBadges = '';
-        if (modalSig) {
-            const modeIcon = modeIcons[modalSig.dominant] || '🔍';
-            modalBadges = `
-                <span class="modal-mode-badge" data-mode="${modalSig.dominant}">
-                    ${modeIcon} ${modalSig.dominant}
-                </span>
-                ${modalSig.pathway ? `<span class="modal-pathway-badge" title="Discussion pathway">${modalSig.pathway}</span>` : ''}
-                ${modalSig.complexity ? `<span class="modal-complexity-badge" title="Modal complexity">⚡ ${modalSig.complexity} modes</span>` : ''}
-            `;
-        }
-
-        return `
-            <div class="list-card modal-card" data-article-id="${article.id}">
-                <div class="list-card-content">
-                    <div class="list-card-meta">
-                        <span class="source-badge">${article.source}</span>
-                        ${modalBadges}
-                    </div>
-                    <h3 class="list-card-title">${article.title}</h3>
-                    <p class="list-card-summary">${summary}</p>
-                    ${article.reddit_comments ? `<p class="reddit-meta">💬 ${article.reddit_comments} comments • ⬆️ ${article.reddit_score} score</p>` : ''}
-
-                    <div class="list-card-actions">
-                        ${AppState.isAuthenticated ? `
-                            <button class="list-action-btn bet-yes-btn" title="Bet YES on this story">👍</button>
-                            <button class="list-action-btn read-btn" title="Read">📖</button>
-                            <button class="list-action-btn bet-no-btn" title="Bet NO on this story">👎</button>
-                            <button class="list-action-btn more-btn" title="Find more like this">+</button>
-                        ` : `
-                            <button class="list-action-btn dislike-btn" data-action="skip" title="Pass">👎</button>
-                            <button class="list-action-btn read-btn" title="Read">📖</button>
-                            <button class="list-action-btn like-btn" data-action="like" title="Like">❤️</button>
-                        `}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    static renderModalSearchResults(articles, query, modalFilter) {
-        const exploreFeed = document.getElementById('explore-feed');
-
-        if (!articles || articles.length === 0) {
-            exploreFeed.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🔍</div>
-                    <h3>No results found</h3>
-                    <p>Try a different search term or modal filter</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Render cards
-        exploreFeed.innerHTML = articles.map(article => this.createModalArticleCard(article)).join('');
-
-        // Add event listeners
-        exploreFeed.querySelectorAll('.modal-card').forEach(cardEl => {
-            const articleId = cardEl.dataset.articleId;
-            const article = articles.find(a => a.id === articleId);
-
-            if (article) {
-                // Read button
-                const readBtn = cardEl.querySelector('.read-btn');
-                if (readBtn) {
-                    readBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-
-                        // For Reddit posts, open URL directly in new tab
-                        if ((article.type === 'reddit_discussion' || article.id?.startsWith('reddit_')) && article.url) {
-                            window.open(article.url, '_blank');
-                        } else {
-                            this.showArticleDetail(article);
-                        }
-
-                        // Track modal interaction
-                        if (article.modal_signature && AppState.modalExplorer) {
-                            AppState.modalExplorer.trackModalInteraction(article, 'read');
-                        }
-                    });
-                }
-
-                // Pass button
-                const passBtn = cardEl.querySelector('.dislike-btn');
-                if (passBtn) {
-                    passBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.handleCardAction(article, 'skip');
-                        cardEl.style.display = 'none';
-
-                        // Track modal interaction
-                        if (article.modal_signature && AppState.modalExplorer) {
-                            AppState.modalExplorer.trackModalInteraction(article, 'pass');
-                        }
-                    });
-                }
-
-                // Like button (guest users only)
-                const likeBtn = cardEl.querySelector('.like-btn');
-                if (likeBtn) {
-                    likeBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.handleCardAction(article, 'like');
-                        cardEl.style.opacity = '0.5';
-
-                        // Track modal interaction
-                        if (article.modal_signature && AppState.modalExplorer) {
-                            AppState.modalExplorer.trackModalInteraction(article, 'like');
-                        }
-                    });
-                }
-
-                // Betting buttons (authenticated users)
-                if (AppState.isAuthenticated) {
-                    const betYesBtn = cardEl.querySelector('.bet-yes-btn');
-                    const betNoBtn = cardEl.querySelector('.bet-no-btn');
-                    const moreBtn = cardEl.querySelector('.more-btn');
-
-                    if (betYesBtn) {
-                        betYesBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            // Check if this is a Reddit post
-                            if (article.type === 'reddit_discussion' || article.id?.startsWith('reddit_')) {
-                                await UIController.handleRedditBet(article, 'YES');
-                            } else {
-                                await this.handleArticleBet(article, 'YES');
-                            }
-                        });
-                    }
-
-                    if (betNoBtn) {
-                        betNoBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            // Check if this is a Reddit post
-                            if (article.type === 'reddit_discussion' || article.id?.startsWith('reddit_')) {
-                                await UIController.handleRedditBet(article, 'NO');
-                            } else {
-                                await this.handleArticleBet(article, 'NO');
-                            }
-                        });
-                    }
-
-                    if (moreBtn) {
-                        moreBtn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            this.exploreTopicWithAI(article, 'explore');
-                        });
-                    }
-                }
-            }
-        });
-
-        // Show modal recommendation after results
-        if (AppState.modalExplorer) {
-            const recommendation = AppState.modalExplorer.getModalRecommendation();
-            const recommendationEl = document.getElementById('modal-recommendation');
-            const recommendationText = document.getElementById('recommendation-text');
-
-            if (recommendation && recommendationText) {
-                recommendationText.textContent = recommendation;
-                recommendationEl.style.display = 'flex';
-            }
-        }
     }
 }
 
@@ -3299,52 +1926,15 @@ function setupEventListeners() {
 
     // Start button
     document.getElementById('start-btn').addEventListener('click', () => {
-        // Check if we have the new survey or old interest chips
-        const surveyQuestions = document.querySelectorAll('.survey-question');
+        const selectedChips = document.querySelectorAll('.chip.selected');
+        AppState.userPreferences.interests = Array.from(selectedChips).map(
+            chip => chip.dataset.topic
+        );
 
-        if (surveyQuestions.length > 0) {
-            // NEW: Process truth-seeking survey
-            const surveyAnswers = {
-                q1: parseInt(document.querySelector('input[name="q1"]:checked')?.value || 3),  // NET
-                q2: parseInt(document.querySelector('input[name="q2"]:checked')?.value || 3),  // REF
-                q3: parseInt(document.querySelector('input[name="q3"]:checked')?.value || 3),  // POL
-                q4: parseInt(document.querySelector('input[name="q4"]:checked')?.value || 3),  // MOR
-                q5: parseInt(document.querySelector('input[name="q5"]:checked')?.value || 3)   // LAW
-            };
-
-            // Calculate modal profile (normalize to 0-1 range)
-            const modalProfile = {
-                NET: surveyAnswers.q1 / 5,
-                REF: surveyAnswers.q2 / 5,
-                POL: surveyAnswers.q3 / 5,
-                MOR: surveyAnswers.q4 / 5,
-                LAW: surveyAnswers.q5 / 5,
-                history: [],
-                lastUpdated: Date.now()
-            };
-
-            // Initialize ModalExplorer with survey results
-            if (AppState.modalExplorer) {
-                AppState.modalExplorer.userModalProfile = modalProfile;
-                AppState.modalExplorer.saveModalProfile();
-            }
-
-            console.log('[Survey] Modal profile initialized:', modalProfile);
-
-            // Set default interests based on top modal modes
-            AppState.userPreferences.interests = ['technology', 'science', 'politics'];
-        } else {
-            // OLD: Interest chips (backwards compatibility)
-            const selectedChips = document.querySelectorAll('.chip.selected');
-            AppState.userPreferences.interests = Array.from(selectedChips).map(
-                chip => chip.dataset.topic
-            );
-
-            // Initialize topic scores
-            AppState.userPreferences.interests.forEach(topic => {
-                AppState.userPreferences.topicScores[topic] = 0.3; // Initial boost
-            });
-        }
+        // Initialize topic scores
+        AppState.userPreferences.interests.forEach(topic => {
+            AppState.userPreferences.topicScores[topic] = 0.3; // Initial boost
+        });
 
         Storage.save('userPreferences', AppState.userPreferences);
         Storage.save('hasOnboarded', true);
@@ -3423,67 +2013,6 @@ function setupEventListeners() {
         const article = AppState.currentModalArticle;
         if (article && article.url) {
             const button = document.getElementById('article-read-btn');
-            button.classList.add('active');
-            setTimeout(() => button.classList.remove('active'), 300);
-
-            // Open original article in new tab
-            window.open(article.url, '_blank');
-        }
-    });
-
-    // Authenticated user betting buttons in article modal
-    document.getElementById('article-bet-yes-btn').addEventListener('click', async () => {
-        const article = AppState.currentModalArticle;
-        if (article) {
-            const button = document.getElementById('article-bet-yes-btn');
-            button.classList.add('active');
-            setTimeout(() => button.classList.remove('active'), 300);
-
-            // Close modal
-            document.getElementById('article-modal').classList.remove('active');
-
-            // Place bet
-            await UIController.handleArticleBet(article, 'YES');
-        }
-    });
-
-    document.getElementById('article-bet-no-btn').addEventListener('click', async () => {
-        const article = AppState.currentModalArticle;
-        if (article) {
-            const button = document.getElementById('article-bet-no-btn');
-            button.classList.add('active');
-            setTimeout(() => button.classList.remove('active'), 300);
-
-            // Close modal
-            document.getElementById('article-modal').classList.remove('active');
-
-            // Place bet
-            await UIController.handleArticleBet(article, 'NO');
-        }
-    });
-
-    document.getElementById('article-more-btn-auth').addEventListener('click', async () => {
-        const article = AppState.currentModalArticle;
-        if (article) {
-            const button = document.getElementById('article-more-btn-auth');
-            button.classList.add('active');
-            setTimeout(() => button.classList.remove('active'), 300);
-
-            // Close the modal
-            document.getElementById('article-modal').classList.remove('active');
-
-            // Switch to Explore tab
-            UIController.switchTab('explore');
-
-            // Explore with AI in the explore view
-            await UIController.exploreTopicWithAI(article, 'explore');
-        }
-    });
-
-    document.getElementById('article-read-btn-auth').addEventListener('click', () => {
-        const article = AppState.currentModalArticle;
-        if (article && article.url) {
-            const button = document.getElementById('article-read-btn-auth');
             button.classList.add('active');
             setTimeout(() => button.classList.remove('active'), 300);
 
@@ -3589,224 +2118,10 @@ function setupEventListeners() {
             }
         });
     });
-
-    // ===== MODAL EXPLORER EVENT LISTENERS =====
-
-    // Modal filter buttons
-    document.querySelectorAll('.modal-filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Update active state
-            document.querySelectorAll('.modal-filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Get selected mode
-            const mode = btn.dataset.mode;
-            AppState.currentModalFilter = mode === 'all' ? null : mode;
-
-            // If there's an active search, re-run it with the new filter
-            if (AppState.currentSearchQuery) {
-                performModalSearch(AppState.currentSearchQuery, AppState.currentModalFilter);
-            }
-        });
-    });
-
-    // Modal search button
-    document.getElementById('modal-search-btn').addEventListener('click', () => {
-        const query = document.getElementById('modal-search-input').value.trim();
-        if (query) {
-            performModalSearch(query, AppState.currentModalFilter);
-        }
-    });
-
-    // Modal search input - Enter key
-    document.getElementById('modal-search-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            const query = e.target.value.trim();
-            if (query) {
-                performModalSearch(query, AppState.currentModalFilter);
-            }
-        }
-    });
-
-    // Web search button
-    document.getElementById('web-search-btn').addEventListener('click', () => {
-        const query = document.getElementById('web-search-input').value.trim();
-        if (query) {
-            performWebSearch(query);
-        }
-    });
-
-    // Web search input - Enter key
-    document.getElementById('web-search-input').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            const query = e.target.value.trim();
-            if (query) {
-                performWebSearch(query);
-            }
-        }
-    });
-}
-
-// ===== MODAL SEARCH FUNCTION =====
-async function performModalSearch(query, modalFilter = null) {
-    console.log(`[ModalSearch] Searching for "${query}" with filter: ${modalFilter || 'none'}`);
-
-    // Store current search
-    AppState.currentSearchQuery = query;
-
-    // Show loading state
-    const exploreFeed = document.getElementById('explore-feed');
-    exploreFeed.innerHTML = `
-        <div class="empty-state">
-            <div class="loading-spinner"></div>
-            <h3>Searching Reddit discussions...</h3>
-            <p>Finding ${modalFilter ? modalFilter + ' mode' : 'all modal'} perspectives</p>
-        </div>
-    `;
-
-    try {
-        // Use ModalExplorer to search
-        const articles = await AppState.modalExplorer.searchByMode(query, modalFilter);
-
-        console.log(`[ModalSearch] Found ${articles.length} results`);
-
-        // Render results
-        UIController.renderModalSearchResults(articles, query, modalFilter);
-
-    } catch (error) {
-        console.error('[ModalSearch] Error:', error);
-        exploreFeed.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">⚠️</div>
-                <h3>Search failed</h3>
-                <p>Error: ${error.message}</p>
-                <p>Make sure the backend is running on ${API_BASE_URL}</p>
-            </div>
-        `;
-    }
-}
-
-// ===== WEB SEARCH FUNCTION =====
-async function performWebSearch(query) {
-    console.log(`[WebSearch] Searching Google News for "${query}"`);
-
-    // Store current search
-    AppState.currentSearchQuery = query;
-
-    // Show loading state
-    const searchFeed = document.getElementById('search-feed');
-    searchFeed.innerHTML = `
-        <div class="empty-state">
-            <div class="loading-spinner"></div>
-            <h3>Searching Google News...</h3>
-            <p>Finding articles about "${query}"</p>
-        </div>
-    `;
-
-    try {
-        if (!API_BASE_URL) {
-            throw new Error('Backend API not configured');
-        }
-
-        // Call backend web search API
-        const response = await fetch(`${API_BASE_URL}/api/search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: query,
-                max_results: 20
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Search failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log(`[WebSearch] Found ${data.articles.length} results`);
-
-        if (data.articles.length === 0) {
-            searchFeed.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">🔍</div>
-                    <h3>No Results Found</h3>
-                    <p>Try different search terms or check your spelling</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Save current articles before adding search results
-        if (!AppState.originalArticles) {
-            AppState.originalArticles = [...AppState.articles];
-        }
-
-        // Append search results to articles (don't replace)
-        const newArticles = data.articles.filter(newArt =>
-            !AppState.articles.some(existingArt => existingArt.id === newArt.id)
-        );
-        AppState.articles = [...AppState.articles, ...newArticles];
-
-        // Render results
-        const searchBanner = `
-            <div class="ai-analysis-banner" style="margin: 1rem;">
-                <h3>🔍 Search Results: "${query}"</h3>
-                <p style="margin-top: 0.5rem; font-weight: 600;">Found ${data.articles.length} article${data.articles.length === 1 ? '' : 's'}</p>
-            </div>
-        `;
-
-        const articleCards = data.articles.map(article =>
-            UIController.createListArticleCard(article)
-        ).join('');
-
-        searchFeed.innerHTML = searchBanner + articleCards;
-
-        // Attach event listeners to search results
-        UIController.attachExploreEventListeners(searchFeed);
-
-    } catch (error) {
-        console.error('[WebSearch] Error:', error);
-        searchFeed.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">⚠️</div>
-                <h3>Search Failed</h3>
-                <p>Error: ${error.message}</p>
-                <p>Make sure the backend is running on ${API_BASE_URL}</p>
-            </div>
-        `;
-    }
 }
 
 // ===== INITIALIZATION =====
 async function initialize() {
-    // Initialize Modal Explorer
-    AppState.modalExplorer = new ModalExplorer();
-
-    // Initialize Bettit API (configure URL)
-    if (typeof bettitAPI !== 'undefined') {
-        bettitAPI.baseURL = BETTIT_API_URL;
-        console.log('Bettit API initialized:', BETTIT_API_URL);
-
-        // Check authentication
-        if (bettitAPI.isAuthenticated()) {
-            console.log('Found auth token, validating...');
-            const result = await bettitAPI.validateToken();
-            if (result.success) {
-                AppState.isAuthenticated = true;
-                AppState.currentUser = result.data.user;
-                console.log('✅ Authenticated as:', result.data.user.username);
-                if (typeof BettitAuth !== 'undefined') BettitAuth.updateUIForAuthState();
-            } else {
-                console.log('❌ Invalid token, user needs to login');
-                bettitAPI.clearToken();
-                if (typeof BettitAuth !== 'undefined') BettitAuth.updateUIForAuthState();
-            }
-        } else {
-            console.log('No auth token found');
-            if (typeof BettitAuth !== 'undefined') BettitAuth.updateUIForAuthState();
-        }
-    }
-
     // Load saved data
     const savedPreferences = Storage.load('userPreferences');
     if (savedPreferences) {
@@ -3828,12 +2143,6 @@ async function initialize() {
     // Setup event listeners
     setupEventListeners();
 
-    // Setup auth event listeners
-    if (typeof BettitAuth !== 'undefined') {
-        BettitAuth.setupAuthEventListeners();
-        console.log('Auth listeners initialized');
-    }
-
     // Start with sample articles for instant loading
     AppState.articles = [...SAMPLE_ARTICLES];
     console.log(`Loaded ${AppState.articles.length} sample articles`);
@@ -3844,30 +2153,15 @@ async function initialize() {
     if (hasOnboarded) {
         console.log('Showing app screen');
         UIController.showScreen('app-screen');
-
-        // Show mixed feed (articles + markets for all users, but only authenticated users can bet)
-        console.log(AppState.isAuthenticated ? 'User authenticated, showing mixed feed...' : 'Guest mode, showing mixed feed (view only)');
         UIController.renderFeed();
     } else {
         console.log('Showing onboarding screen');
         UIController.showScreen('onboarding-screen');
     }
 
-    // Fetch fresh articles + Reddit posts in the background (for all users)
-    console.log('Fetching mixed content (articles + Reddit) in background...');
-    fetchMixedContentInBackground(hasOnboarded);
-
-    // Load markets from backend in the background (for all users)
-    console.log('Loading markets in background...');
-    loadMarketsFromBackend().then(() => {
-        // Refresh feed to show markets
-        if (hasOnboarded && AppState.currentScreen === 'app-screen') {
-            console.log('Refreshing feed to show markets');
-            UIController.renderFeed();
-        }
-    }).catch(error => {
-        console.error('Error loading markets:', error);
-    });
+    // Fetch fresh articles from RSS feeds in the background
+    console.log('Fetching articles from RSS feeds in background...');
+    fetchRSSInBackground(hasOnboarded);
 
     console.log('Initialization complete');
 }
@@ -3898,182 +2192,8 @@ async function fetchRSSInBackground(hasOnboarded) {
     }
 }
 
-// Fetch Reddit posts and mix with articles
-async function fetchRedditPosts(query = 'trending', limit = 10) {
-    try {
-        console.log(`Fetching Reddit posts for: ${query}`);
-
-        const response = await fetch(`${API_BASE_URL}/api/search/reddit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: query,
-                sort_by: 'hot',
-                limit: limit
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Reddit search failed');
-        }
-
-        const data = await response.json();
-        console.log(`✅ Loaded ${data.results.length} Reddit posts`);
-
-        // Mark posts as Reddit content
-        const redditPosts = data.results.map(post => ({
-            ...post,
-            isReddit: true,
-            type: 'reddit_discussion'
-        }));
-
-        return redditPosts;
-    } catch (error) {
-        console.error('Error fetching Reddit posts:', error);
-        return [];
-    }
-}
-
-// Mix Reddit posts with articles (1 Reddit post every 3 articles)
-function mixRedditWithArticles(articles, redditPosts) {
-    if (redditPosts.length === 0) {
-        return articles;
-    }
-
-    const mixed = [];
-    let redditIndex = 0;
-
-    for (let i = 0; i < articles.length; i++) {
-        mixed.push(articles[i]);
-
-        // Insert Reddit post every 3 articles
-        if ((i + 1) % 3 === 0 && redditIndex < redditPosts.length) {
-            mixed.push(redditPosts[redditIndex]);
-            redditIndex++;
-        }
-    }
-
-    // Add any remaining Reddit posts at the end
-    while (redditIndex < redditPosts.length) {
-        mixed.push(redditPosts[redditIndex]);
-        redditIndex++;
-    }
-
-    console.log(`Mixed feed: ${articles.length} articles + ${redditPosts.length} Reddit posts = ${mixed.length} total`);
-    return mixed;
-}
-
-// Fetch Reddit and mix with RSS articles in background
-async function fetchMixedContentInBackground(hasOnboarded) {
-    try {
-        // Fetch RSS articles
-        const topics = AppState.userPreferences.interests.length > 0
-            ? AppState.userPreferences.interests
-            : null;
-
-        const freshArticles = await RSSFeedFetcher.fetchAllTopics(topics);
-
-        // Fetch Reddit posts based on user interests
-        const redditQuery = topics && topics.length > 0
-            ? topics.join(' OR ')
-            : 'news technology science politics';
-
-        const redditPosts = await fetchRedditPosts(redditQuery, 10);
-
-        // Mix Reddit posts with articles
-        const mixedContent = mixRedditWithArticles(freshArticles, redditPosts);
-
-        if (mixedContent.length > 0) {
-            console.log(`Loaded ${mixedContent.length} items (${freshArticles.length} articles + ${redditPosts.length} Reddit posts)`);
-            AppState.articles = mixedContent;
-
-            // Refresh the feed if user is already in the app
-            if (hasOnboarded && AppState.currentScreen === 'app-screen') {
-                console.log('Refreshing feed with mixed content');
-                UIController.renderFeed();
-            }
-        } else {
-            console.log('No content loaded, keeping sample articles');
-        }
-    } catch (error) {
-        console.error('Error fetching mixed content:', error);
-    }
-}
-
-// ===== BETTIT MARKET LOADING =====
-async function loadMarketsFromBackend() {
-    if (!bettitAPI) {
-        console.error('Bettit API not available');
-        return;
-    }
-
-    try {
-        console.log('Loading markets from backend...');
-
-        const result = await bettitAPI.getMarkets({
-            status: 'open',
-            limit: 50
-        });
-
-        if (result.success) {
-            AppState.markets = result.data.markets;
-            console.log(`✅ Loaded ${AppState.markets.length} markets from backend`);
-
-            // Load user's bets if authenticated
-            if (AppState.isAuthenticated) {
-                const betsResult = await bettitAPI.getMyBets(50);
-                if (betsResult.success) {
-                    AppState.userBets = betsResult.data.bets;
-                    console.log(`✅ Loaded ${AppState.userBets.length} user bets`);
-                }
-            }
-        } else {
-            console.error('❌ Failed to load markets:', result.error);
-        }
-    } catch (error) {
-        console.error('Error loading markets:', error);
-    }
-}
-
-async function createMarketFromArticle(article) {
-    if (!AppState.isAuthenticated) {
-        BettitAuth.showAuthModal('login');
-        return;
-    }
-
-    // Use Claude to generate market question
-    const question = `Will ${article.title.replace(/\?$/, '')}?`;
-    const description = article.summary || article.content?.substring(0, 200);
-
-    const result = await bettitAPI.createMarket({
-        question,
-        description,
-        resolutionCriteria: 'Based on reliable news sources and expert consensus',
-        resolutionHours: 168, // 1 week
-        community: article.topic || 'general',
-        sourceUrl: article.url,
-        sourceTitle: article.title,
-        imageUrl: article.image
-    });
-
-    if (result.success) {
-        console.log('✅ Market created:', result.data.market);
-        AppState.markets.unshift(result.data.market);
-
-        // Refresh mixed feed to show new market
-        UIController.renderFeed();
-
-        alert('Market created! Start betting now.');
-    } else {
-        console.error('❌ Failed to create market:', result.error);
-        alert(`Error creating market: ${result.error}`);
-    }
-}
-
 // Expose AppState for debugging and testing
 window.AppState = AppState;
-window.loadMarketsFromBackend = loadMarketsFromBackend;
-window.createMarketFromArticle = createMarketFromArticle;
 
 // Start the app
 console.log('app.js loaded');

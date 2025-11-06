@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>NewsBadger - Your Personalized News</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Bettit - Prediction Markets & News</title>
+    <link rel="stylesheet" href="styles.css?v=20251102-6">
 </head>
 <body>
     <!-- Loading Screen -->
     <div id="loading-screen" class="screen active">
         <div class="loading-content">
-            <div class="logo">🦡</div>
-            <h1>NewsBadger</h1>
-            <p>Personalizing your news feed...</p>
+            <div class="logo">💰</div>
+            <h1>Bettit</h1>
+            <p>Prediction markets meet news discovery...</p>
             <div class="loading-spinner"></div>
         </div>
     </div>
@@ -22,41 +22,185 @@
     <!-- Onboarding Screen -->
     <div id="onboarding-screen" class="screen">
         <div class="onboarding-content">
-            <div class="logo-large">🦡</div>
-            <h1>Welcome to NewsBadger</h1>
-            <p class="subtitle">AI-powered personalized news</p>
+            <div class="logo-large">💰</div>
+            <h1>Welcome to Bettit</h1>
+            <p class="subtitle">Predict the future, earn play money</p>
 
             <div class="onboarding-features">
                 <div class="feature">
                     <span class="feature-icon">🎯</span>
-                    <h3>Smart Recommendations</h3>
-                    <p>AI learns what you like to read</p>
+                    <h3>Prediction Markets</h3>
+                    <p>Bet on news outcomes with play money</p>
                 </div>
                 <div class="feature">
-                    <span class="feature-icon">✨</span>
-                    <h3>AI Summaries</h3>
-                    <p>Quick summaries powered by Claude</p>
+                    <span class="feature-icon">💵</span>
+                    <h3>Free $10,000 to Start</h3>
+                    <p>Start betting immediately, no risk</p>
                 </div>
                 <div class="feature">
-                    <span class="feature-icon">📱</span>
-                    <h3>Swipe Interface</h3>
-                    <p>Like for more, skip to pass</p>
+                    <span class="feature-icon">📊</span>
+                    <h3>Live Odds</h3>
+                    <p>Real-time market pricing on every bet</p>
                 </div>
             </div>
 
-            <div class="interest-selector">
-                <h3>Select your interests:</h3>
-                <div class="interest-chips" id="interest-chips">
-                    <div class="chip" data-topic="technology">Technology</div>
-                    <div class="chip" data-topic="science">Science</div>
-                    <div class="chip" data-topic="business">Business</div>
-                    <div class="chip" data-topic="politics">Politics</div>
-                    <div class="chip" data-topic="health">Health</div>
-                    <div class="chip" data-topic="sports">Sports</div>
-                    <div class="chip" data-topic="entertainment">Entertainment</div>
-                    <div class="chip" data-topic="world">World News</div>
-                    <div class="chip" data-topic="climate">Climate</div>
-                    <div class="chip" data-topic="ai">Artificial Intelligence</div>
+            <div class="truth-survey">
+                <h3>How do you discover truth?</h3>
+                <p class="survey-hint">Help us understand your truth-seeking style</p>
+
+                <!-- Question 1: NET mode -->
+                <div class="survey-question">
+                    <p class="question-text">I trust information more when many people are talking about it</p>
+                    <div class="survey-scale">
+                        <span class="scale-label">Strongly Disagree</span>
+                        <div class="scale-options">
+                            <label class="scale-option">
+                                <input type="radio" name="q1" value="1">
+                                <span class="scale-marker">1</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q1" value="2">
+                                <span class="scale-marker">2</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q1" value="3" checked>
+                                <span class="scale-marker">3</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q1" value="4">
+                                <span class="scale-marker">4</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q1" value="5">
+                                <span class="scale-marker">5</span>
+                            </label>
+                        </div>
+                        <span class="scale-label">Strongly Agree</span>
+                    </div>
+                </div>
+
+                <!-- Question 2: REF mode -->
+                <div class="survey-question">
+                    <p class="question-text">I need to see sources and evidence before believing something</p>
+                    <div class="survey-scale">
+                        <span class="scale-label">Strongly Disagree</span>
+                        <div class="scale-options">
+                            <label class="scale-option">
+                                <input type="radio" name="q2" value="1">
+                                <span class="scale-marker">1</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q2" value="2">
+                                <span class="scale-marker">2</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q2" value="3" checked>
+                                <span class="scale-marker">3</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q2" value="4">
+                                <span class="scale-marker">4</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q2" value="5">
+                                <span class="scale-marker">5</span>
+                            </label>
+                        </div>
+                        <span class="scale-label">Strongly Agree</span>
+                    </div>
+                </div>
+
+                <!-- Question 3: POL mode -->
+                <div class="survey-question">
+                    <p class="question-text">I look at who has power and who benefits from a claim</p>
+                    <div class="survey-scale">
+                        <span class="scale-label">Strongly Disagree</span>
+                        <div class="scale-options">
+                            <label class="scale-option">
+                                <input type="radio" name="q3" value="1">
+                                <span class="scale-marker">1</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q3" value="2">
+                                <span class="scale-marker">2</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q3" value="3" checked>
+                                <span class="scale-marker">3</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q3" value="4">
+                                <span class="scale-marker">4</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q3" value="5">
+                                <span class="scale-marker">5</span>
+                            </label>
+                        </div>
+                        <span class="scale-label">Strongly Agree</span>
+                    </div>
+                </div>
+
+                <!-- Question 4: MOR mode -->
+                <div class="survey-question">
+                    <p class="question-text">I judge information by whether it causes harm or helps people</p>
+                    <div class="survey-scale">
+                        <span class="scale-label">Strongly Disagree</span>
+                        <div class="scale-options">
+                            <label class="scale-option">
+                                <input type="radio" name="q4" value="1">
+                                <span class="scale-marker">1</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q4" value="2">
+                                <span class="scale-marker">2</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q4" value="3" checked>
+                                <span class="scale-marker">3</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q4" value="4">
+                                <span class="scale-marker">4</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q4" value="5">
+                                <span class="scale-marker">5</span>
+                            </label>
+                        </div>
+                        <span class="scale-label">Strongly Agree</span>
+                    </div>
+                </div>
+
+                <!-- Question 5: LAW mode -->
+                <div class="survey-question">
+                    <p class="question-text">I want to know if something is legal or has consequences</p>
+                    <div class="survey-scale">
+                        <span class="scale-label">Strongly Disagree</span>
+                        <div class="scale-options">
+                            <label class="scale-option">
+                                <input type="radio" name="q5" value="1">
+                                <span class="scale-marker">1</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q5" value="2">
+                                <span class="scale-marker">2</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q5" value="3" checked>
+                                <span class="scale-marker">3</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q5" value="4">
+                                <span class="scale-marker">4</span>
+                            </label>
+                            <label class="scale-option">
+                                <input type="radio" name="q5" value="5">
+                                <span class="scale-marker">5</span>
+                            </label>
+                        </div>
+                        <span class="scale-label">Strongly Agree</span>
+                    </div>
                 </div>
             </div>
 
@@ -69,10 +213,19 @@
         <!-- Top Bar -->
         <header class="top-bar">
             <div class="header-left">
-                <div class="logo-small">🦡</div>
-                <h2>NewsBadger</h2>
+                <div class="logo-small">💰</div>
+                <h2>Bettit</h2>
             </div>
             <div class="header-right">
+                <!-- Balance Display (shown when logged in) -->
+                <div class="balance-display" id="balance-display" style="display: none;">
+                    <span class="balance-label">Balance:</span>
+                    <span class="balance-amount" id="balance-amount">$0</span>
+                </div>
+                <!-- Auth Button (shown when logged out) -->
+                <button class="auth-header-btn" id="auth-header-btn" style="display: none;">
+                    Login
+                </button>
                 <button class="icon-btn" id="settings-btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"/>
@@ -96,6 +249,12 @@
                     <path d="M21 21l-4.35-4.35"/>
                 </svg>
                 <span>Explore</span>
+            </button>
+            <button class="tab-btn" data-tab="discussions">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>Discussions</span>
             </button>
             <button class="tab-btn" data-tab="search">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -128,18 +287,142 @@
 
         <!-- Explore View -->
         <div id="explore-view" class="view">
+            <div class="modal-explorer-container">
+                <div class="modal-search-header">
+                    <h2>Modal Discovery</h2>
+                    <p class="modal-hint">Explore discussions through different truth-seeking lenses</p>
+                </div>
+
+                <!-- Modal Filter Buttons (Hidden for users - development only) -->
+                <div class="modal-filters" style="display: none;">
+                    <button class="modal-filter-btn active" data-mode="all">
+                        <span class="modal-icon">🎯</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">All Modes</span>
+                            <span class="modal-hint-text">Everything</span>
+                        </div>
+                    </button>
+                    <button class="modal-filter-btn" data-mode="NET">
+                        <span class="modal-icon">🌐</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">What's Resonating</span>
+                            <span class="modal-hint-text">Viral & trending</span>
+                        </div>
+                    </button>
+                    <button class="modal-filter-btn" data-mode="REF">
+                        <span class="modal-icon">📚</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">Evidence-Based</span>
+                            <span class="modal-hint-text">Sources & research</span>
+                        </div>
+                    </button>
+                    <button class="modal-filter-btn" data-mode="POL">
+                        <span class="modal-icon">⚙️</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">Systems Critique</span>
+                            <span class="modal-hint-text">Power & structure</span>
+                        </div>
+                    </button>
+                    <button class="modal-filter-btn" data-mode="MOR">
+                        <span class="modal-icon">💗</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">Moral Reasoning</span>
+                            <span class="modal-hint-text">Ethics & values</span>
+                        </div>
+                    </button>
+                    <button class="modal-filter-btn" data-mode="LAW">
+                        <span class="modal-icon">⚖️</span>
+                        <div class="modal-filter-text">
+                            <span class="modal-label">Legal View</span>
+                            <span class="modal-hint-text">Justice & accountability</span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Reddit Search Box -->
+                <div class="modal-search-box">
+                    <input
+                        type="text"
+                        id="modal-search-input"
+                        class="modal-search-input"
+                        placeholder="Search Reddit discussions..."
+                    >
+                    <button id="modal-search-btn" class="modal-search-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal Profile Recommendation -->
+                <div id="modal-recommendation" class="modal-recommendation" style="display: none;">
+                    <span class="recommendation-icon">💡</span>
+                    <span id="recommendation-text"></span>
+                </div>
+            </div>
+
             <div class="explore-feed" id="explore-feed">
                 <!-- List cards will be dynamically inserted here -->
             </div>
         </div>
 
-        <!-- Search View (Full Coverage) -->
+        <!-- Discussions View (Reddit Only) -->
+        <div id="discussions-view" class="view">
+            <div class="modal-explorer-container">
+                <div class="modal-search-header">
+                    <h2>💬 Reddit Discussions</h2>
+                    <p class="modal-hint">Explore conversations and bet on post popularity</p>
+                </div>
+
+                <!-- Reddit Search Box -->
+                <div class="modal-search-box">
+                    <input
+                        type="text"
+                        id="discussions-search-input"
+                        class="modal-search-input"
+                        placeholder="Search Reddit discussions..."
+                    >
+                    <button id="discussions-search-btn" class="modal-search-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="explore-feed" id="discussions-feed">
+                <!-- Reddit discussion cards will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- Search View (Web News Search) -->
         <div id="search-view" class="view">
+            <!-- Search Input Header -->
+            <div class="web-search-header">
+                <div class="web-search-bar">
+                    <input
+                        type="text"
+                        id="web-search-input"
+                        class="web-search-input"
+                        placeholder="Search any news topic..."
+                        />
+                    <button id="web-search-btn" class="web-search-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        Search
+                    </button>
+                </div>
+            </div>
+
             <div class="search-feed" id="search-feed">
                 <div class="empty-state" style="display: block;">
                     <div class="empty-icon">🔍</div>
-                    <h3>Full Coverage Search</h3>
-                    <p>Click "+ Find more like this" on any article to discover related coverage from across the web</p>
+                    <h3>Search Google News</h3>
+                    <p>Search for any news topic and get fresh results from across the web</p>
                 </div>
             </div>
         </div>
@@ -164,6 +447,74 @@
                     <div class="streak-info">
                         <span class="streak-emoji">🔥</span>
                         <span class="streak-value" id="streak-value">0 days</span>
+                    </div>
+                </div>
+
+                <!-- Betting Performance -->
+                <div class="stat-card">
+                    <h3>💰 Your Betting Performance</h3>
+
+                    <div class="betting-stats-grid" id="betting-stats-grid">
+                        <div class="betting-stat">
+                            <div class="betting-stat-value" id="active-bets-count">0</div>
+                            <div class="betting-stat-label">Active Bets</div>
+                        </div>
+                        <div class="betting-stat">
+                            <div class="betting-stat-value" id="total-staked">$0</div>
+                            <div class="betting-stat-label">Total Staked</div>
+                        </div>
+                        <div class="betting-stat">
+                            <div class="betting-stat-value" id="potential-winnings">$0</div>
+                            <div class="betting-stat-label">Potential Win</div>
+                        </div>
+                    </div>
+
+                    <div id="user-bets-list" class="user-bets-list">
+                        <!-- User bets will be rendered here -->
+                    </div>
+
+                    <div id="no-bets-message" class="empty-state" style="display: none;">
+                        <p>You haven't placed any bets yet!</p>
+                        <p style="font-size: 0.9rem; opacity: 0.7;">Browse markets in the <strong>For You</strong> tab to get started.</p>
+                    </div>
+                </div>
+
+                <!-- Modal Profile Dashboard -->
+                <div class="stat-card modal-profile-card">
+                    <h3>🔍 Your Modal Profile</h3>
+                    <p class="modal-profile-hint">How you explore different truth-seeking perspectives</p>
+
+                    <div id="modal-profile-content">
+                        <div class="modal-profile-empty">
+                            <p>Search Reddit with modal filters to build your profile!</p>
+                            <p style="font-size: 0.9rem; opacity: 0.7; margin-top: 0.5rem;">
+                                Try exploring discussions in the <strong>Explore</strong> tab
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="modal-profile-stats" style="display: none;">
+                        <div class="modal-stat-grid">
+                            <div class="modal-stat">
+                                <div class="modal-stat-icon">📊</div>
+                                <div class="modal-stat-value" id="modal-total-interactions">0</div>
+                                <div class="modal-stat-label">Interactions</div>
+                            </div>
+                            <div class="modal-stat">
+                                <div class="modal-stat-icon">🛤️</div>
+                                <div class="modal-stat-value" id="modal-unique-pathways">0</div>
+                                <div class="modal-stat-label">Pathways</div>
+                            </div>
+                            <div class="modal-stat">
+                                <div class="modal-stat-icon">⚡</div>
+                                <div class="modal-stat-value" id="modal-avg-complexity">0</div>
+                                <div class="modal-stat-label">Avg Complexity</div>
+                            </div>
+                        </div>
+
+                        <div class="modal-profile-bars" id="modal-profile-bars">
+                            <!-- Modal mode bars will be inserted here -->
+                        </div>
                     </div>
                 </div>
 
@@ -224,8 +575,8 @@
 
             <div id="article-content"></div>
 
-            <!-- Article Action Buttons -->
-            <div class="article-actions" id="article-actions">
+            <!-- Article Action Buttons (Guest Users) -->
+            <div class="article-actions" id="article-actions-guest" style="display: none;">
                 <button class="side-action-btn bookmark-action" id="article-bookmark-btn" title="Bookmark">
                     🔖
                 </button>
@@ -242,9 +593,128 @@
                     📖
                 </button>
             </div>
+
+            <!-- Article Action Buttons (Authenticated Users) -->
+            <div class="article-actions" id="article-actions-auth" style="display: none;">
+                <button class="side-action-btn bet-yes-action" id="article-bet-yes-btn" title="Bet YES" style="background: var(--success-color); color: white;">
+                    👍 YES
+                </button>
+                <button class="side-action-btn bet-no-action" id="article-bet-no-btn" title="Bet NO" style="background: var(--error-color); color: white;">
+                    👎 NO
+                </button>
+                <button class="side-action-btn more-action" id="article-more-btn-auth" title="Explore More">
+                    🔍
+                </button>
+                <button class="side-action-btn read-action" id="article-read-btn-auth" title="Read Full Article" style="background: var(--primary-color); color: white;">
+                    📖
+                </button>
+            </div>
         </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="modal">
+        <div class="modal-content auth-modal-content">
+            <button class="close-btn" id="close-auth-btn">×</button>
+
+            <div class="auth-container">
+                <div class="auth-logo">💰</div>
+                <h2 id="auth-title">Welcome to Bettit</h2>
+                <p class="auth-subtitle">Start with $10,000 play money</p>
+
+                <!-- Login Form -->
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="auth-btn primary-btn">Login</button>
+                    <p class="auth-switch">
+                        Don't have an account?
+                        <a href="#" id="show-register">Sign up</a>
+                    </p>
+                </form>
+
+                <!-- Register Form -->
+                <form id="register-form" class="auth-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" required placeholder="cooluser123" minlength="3" maxlength="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" required placeholder="••••••••" minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="register-display-name">Display Name (optional)</label>
+                        <input type="text" id="register-display-name" placeholder="Your Name">
+                    </div>
+                    <button type="submit" class="auth-btn primary-btn">Create Account</button>
+                    <p class="auth-switch">
+                        Already have an account?
+                        <a href="#" id="show-login">Login</a>
+                    </p>
+                </form>
+
+                <div id="auth-error" class="auth-error" style="display: none;"></div>
+                <div id="auth-success" class="auth-success" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reddit Market Type Selection Modal -->
+    <div id="reddit-market-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content reddit-market-modal">
+            <div class="modal-header">
+                <h2>📊 Choose Betting Market Type</h2>
+                <button class="modal-close" onclick="document.getElementById('reddit-market-modal').style.display='none'">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">What do you want to bet on for this Reddit post?</p>
+
+                <div class="market-type-options">
+                    <button class="market-type-btn" data-type="popularity">
+                        <div class="market-type-icon">📈</div>
+                        <div class="market-type-info">
+                            <h3>Popularity</h3>
+                            <p>Bet on upvote milestones</p>
+                            <span class="market-type-example">e.g., "Will this reach 2x upvotes?"</span>
+                        </div>
+                    </button>
+
+                    <button class="market-type-btn" data-type="engagement">
+                        <div class="market-type-icon">💬</div>
+                        <div class="market-type-info">
+                            <h3>Engagement</h3>
+                            <p>Bet on comment milestones</p>
+                            <span class="market-type-example">e.g., "Will this get 2x comments?"</span>
+                        </div>
+                    </button>
+
+                    <button class="market-type-btn" data-type="prediction">
+                        <div class="market-type-icon">🤖</div>
+                        <div class="market-type-info">
+                            <h3>AI Prediction</h3>
+                            <p>AI-generated betting condition</p>
+                            <span class="market-type-example">AI analyzes the post to create a prediction</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="bettit-api.js"></script>
+    <script src="bettit-auth-ui.js"></script>
+    <script src="bettit-market-ui.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
